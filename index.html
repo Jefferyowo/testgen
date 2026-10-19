@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartLedger | 個人記帳與消費分析系統</title>
+    <!-- 引入 Google Fonts: Inter 與 Noto Sans TC -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- 引入 FontAwesome 圖示 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans TC', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* 自訂捲軸與動畫效果 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .fade-in {
+            animation: fadeIn 0.25s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* 進度條平滑過渡 */
+        .progress-bar-fill {
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-brand-500 selection:text-white">
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+                    <i class="fa-solid fa-wallet text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        SmartLedger
+                        <span class="text-xs font-medium px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-600 border border-brand-100">GitHub Pages Ready</span>
+                    </h1>
+                    <p class="text-xs text-slate-500">個人記帳與視覺化消費分析系統</p>
+                </div>
+            </div>
+
+            <!-- 工具按鈕群 -->
+            <div class="flex flex-wrap items-center gap-2">
+                <button onclick="openCategoryModal()" class="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition">
+                    <i class="fa-solid fa-tags text-brand-600"></i>
+                    <span>分類管理</span>
+                </button>
+                <button onclick="loadDemoData()" class="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>載入範例資料</span>
+                </button>
+                <div class="relative group">
+                    <button onclick="exportCSV()" class="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition">
+                        <i class="fa-solid fa-file-csv"></i>
+                        <span>匯出 CSV</span>
+                    </button>
+                </div>
+                <button onclick="confirmClearData()" class="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span class="hidden sm:inline">清空資料</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- 篩選控制列 -->
+        <section class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                <div class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <i class="fa-solid fa-filter text-brand-500"></i>
+                    <span>檢視區間與篩選：</span>
+                </div>
+
+                <!-- 月份選擇 -->
+                <div class="flex items-center bg-slate-100 rounded-xl p-1">
+                    <button id="btnModeMonth" onclick="setFilterMode('month')" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-800 shadow-sm transition">
+                        指定月份
+                    </button>
+                    <button id="btnModeAll" onclick="setFilterMode('all')" class="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition">
+                        全部時間
+                    </button>
+                </div>
+
+                <input type="month" id="filterMonth" onchange="applyFilters()" class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-700 font-medium">
+
+                <!-- 類型篩選 -->
+                <select id="filterType" onchange="onFilterTypeChange()" class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-700 font-medium">
+                    <option value="all">全部收支類型</option>
+                    <option value="expense">僅看支出</option>
+                    <option value="income">僅看收入</option>
+                </select>
+
+                <!-- 分類篩選 -->
+                <select id="filterCategory" onchange="applyFilters()" class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 text-slate-700 font-medium">
+                    <option value="all">全部分類</option>
+                </select>
+            </div>
+
+            <!-- 搜尋備註 -->
+            <div class="relative w-full sm:w-64">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" id="filterKeyword" oninput="applyFilters()" placeholder="搜尋備註或分類關鍵字..." class="w-full pl-9 pr-8 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500">
+                <button id="btnClearSearch" onclick="clearSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- 頂部四格數據總結卡片 -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- 總收入 -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider" id="labelIncome">當期總收入</p>
+                    <h2 class="text-2xl font-bold text-emerald-600 mt-1" id="statIncome">NT$ 0</h2>
+                    <p class="text-xs text-slate-400 mt-1" id="statIncomeCount">共 0 筆收入</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 text-xl">
+                    <i class="fa-solid fa-arrow-trend-up"></i>
+                </div>
+            </div>
+
+            <!-- 總支出 -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider" id="labelExpense">當期總支出</p>
+                    <h2 class="text-2xl font-bold text-rose-600 mt-1" id="statExpense">NT$ 0</h2>
+                    <p class="text-xs text-slate-400 mt-1" id="statExpenseCount">共 0 筆支出</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600 text-xl">
+                    <i class="fa-solid fa-arrow-trend-down"></i>
+                </div>
+            </div>
+
+            <!-- 淨結餘 -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">期間淨結餘</p>
+                    <h2 class="text-2xl font-bold text-slate-800 mt-1" id="statBalance">NT$ 0</h2>
+                    <p class="text-xs text-slate-400 mt-1" id="statSavingsRate">儲蓄率 0%</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 text-xl">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                </div>
+            </div>
+
+            <!-- 每月預算剩餘 -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between relative overflow-hidden">
+                <div class="z-10">
+                    <div class="flex items-center gap-1.5">
+                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider" id="labelBudgetCard">本月預算剩餘</p>
+                        <button onclick="focusBudgetInput()" class="text-xs text-brand-600 hover:underline font-medium" title="修改預算">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                    </div>
+                    <h2 class="text-2xl font-bold text-brand-600 mt-1" id="statBudgetRemain">NT$ 0</h2>
+                    <p class="text-xs text-slate-400 mt-1" id="statBudgetTotal">設定預算：NT$ 20,000</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 text-xl z-10" id="budgetCardIcon">
+                    <i class="fa-solid fa-bullseye"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- 主體雙欄佈局：左側操作與設定、右側圖表與列表 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- 左欄 (佔 4 等份)：新增帳目表單 & 每月預算設定 -->
+            <div class="lg:col-span-4 space-y-6">
+
+                <!-- 新增收支紀錄卡片 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 sm:p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-circle-plus text-brand-600"></i>
+                            新增收支紀錄
+                        </h3>
+                        <span class="text-xs text-slate-400">即時自動儲存</span>
+                    </div>
+
+                    <form id="transactionForm" onsubmit="handleAddTransaction(event)" class="space-y-4">
+                        <!-- 收支類型切換 Tab -->
+                        <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                            <button type="button" id="tabExpense" onclick="switchFormType('expense')" class="py-2 text-sm font-semibold rounded-lg bg-rose-500 text-white shadow-sm transition flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-minus-circle"></i> 支出
+                            </button>
+                            <button type="button" id="tabIncome" onclick="switchFormType('income')" class="py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-plus-circle"></i> 收入
+                            </button>
+                        </div>
+
+                        <input type="hidden" id="txType" value="expense">
+
+                        <!-- 日期與分類 -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">日期</label>
+                                <input type="date" id="txDate" required class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-1">
+                                    <label class="block text-xs font-semibold text-slate-600">分類</label>
+                                    <button type="button" onclick="openCategoryModal()" class="text-[11px] text-brand-600 hover:underline font-medium">+ 新增分類</button>
+                                </div>
+                                <select id="txCategory" required class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500">
+                                    <!-- 由 JS 動態產生 -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 金額 -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">金額 (NT$)</label>
+                            <div class="relative">
+                                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-sm">$</span>
+                                <input type="number" id="txAmount" min="1" step="1" required placeholder="請輸入正整數金額，例如 150" class="w-full pl-8 pr-4 py-2.5 text-base font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            </div>
+                        </div>
+
+                        <!-- 備註 -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">備註說明 <span class="text-slate-400 font-normal">(選填)</span></label>
+                            <input type="text" id="txNote" maxlength="50" placeholder="例如：午餐便當、捷運定期票..." class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+
+                        <!-- 提交按鈕 -->
+                        <button type="submit" id="btnSubmitTx" class="w-full py-2.5 px-4 bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-semibold rounded-xl shadow-md shadow-brand-500/20 transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-check"></i>
+                            <span>儲存這筆紀錄</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 每月預算設定與進度追蹤卡片 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 sm:p-6">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-amber-500"></i>
+                            每月預算設定與監控
+                        </h3>
+                        <span id="budgetMonthBadge" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">2026-10</span>
+                    </div>
+
+                    <p class="text-xs text-slate-500 mb-4">設定您的每月消費上限，系統將自動計算當月支出佔比並提供超支預警。</p>
+
+                    <!-- 預算設定輸入框 -->
+                    <div class="flex gap-2 mb-5">
+                        <div class="relative flex-grow">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-semibold">NT$</span>
+                            <input type="number" id="budgetInput" min="0" step="500" placeholder="設定每月總預算" class="w-full pl-10 pr-3 py-2 text-sm font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                        <button onclick="saveBudget()" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition shrink-0">
+                            更新預算
+                        </button>
+                    </div>
+
+                    <!-- 預算進度條區塊 -->
+                    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/70 space-y-3">
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <span class="text-xs text-slate-500 block">當月已支出 / 預算總額</span>
+                                <span class="text-sm font-bold text-slate-800" id="budgetProgressText">NT$ 0 / NT$ 20,000</span>
+                            </div>
+                            <span class="text-base font-extrabold text-emerald-600" id="budgetPercentBadge">0%</span>
+                        </div>
+
+                        <!-- 進度條 -->
+                        <div class="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
+                            <div id="budgetProgressBar" class="h-full bg-emerald-500 progress-bar-fill rounded-full" style="width: 0%"></div>
+                        </div>
+
+                        <!-- 狀態提示訊息 -->
+                        <div id="budgetAlertBox" class="flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-50/80 px-3 py-2 rounded-lg border border-emerald-200/60">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <span id="budgetAlertText">目前消費控制良好，請保持！</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 右欄 (佔 8 等份)：視覺化圖表分析 & 交易明細列表 -->
+            <div class="lg:col-span-8 space-y-6">
+
+                <!-- 視覺化圖表雙欄區 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- 消費分類佔比圓餅圖 -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 flex flex-col">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-chart-pie text-brand-500"></i>
+                                <span id="pieChartTitle">支出分類佔比分析</span>
+                            </h3>
+                            <div class="flex bg-slate-100 p-0.5 rounded-lg text-xs">
+                                <button id="btnPieExpense" onclick="switchPieMode('expense')" class="px-2.5 py-1 rounded-md bg-white font-semibold text-slate-800 shadow-sm transition">支出</button>
+                                <button id="btnPieIncome" onclick="switchPieMode('income')" class="px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-800 transition">收入</button>
+                            </div>
+                        </div>
+                        <div class="relative flex-grow flex items-center justify-center min-h-[250px]">
+                            <canvas id="categoryPieChart"></canvas>
+                            <div id="pieEmptyState" class="hidden absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                                <i class="fa-solid fa-chart-pie text-3xl mb-2 opacity-40"></i>
+                                <p class="text-xs">尚無符合條件的分類數據</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 收支趨勢 / 分類排行長條圖 -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 flex flex-col">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-chart-column text-indigo-500"></i>
+                                <span id="barChartTitle">收支趨勢與排行分析</span>
+                            </h3>
+                            <div class="flex bg-slate-100 p-0.5 rounded-lg text-xs">
+                                <button id="btnBarTrend" onclick="switchBarMode('trend')" class="px-2.5 py-1 rounded-md bg-white font-semibold text-slate-800 shadow-sm transition">日期趨勢</button>
+                                <button id="btnBarRank" onclick="switchBarMode('rank')" class="px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-800 transition">分類排行</button>
+                            </div>
+                        </div>
+                        <div class="relative flex-grow flex items-center justify-center min-h-[250px]">
+                            <canvas id="trendBarChart"></canvas>
+                            <div id="barEmptyState" class="hidden absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                                <i class="fa-solid fa-chart-simple text-3xl mb-2 opacity-40"></i>
+                                <p class="text-xs">尚無符合條件的圖表數據</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 交易歷史明細列表 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                    <div class="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-base font-bold text-slate-900">收支明細紀錄</h3>
+                            <span id="recordCountBadge" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-600">0 筆</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-slate-500">
+                            <span>排序方式：</span>
+                            <select id="sortOrder" onchange="applyFilters()" class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-700 font-medium focus:outline-none">
+                                <option value="date-desc">日期 (由新到舊)</option>
+                                <option value="date-asc">日期 (由舊到新)</option>
+                                <option value="amount-desc">金額 (由高到低)</option>
+                                <option value="amount-asc">金額 (由低到高)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 列表容器 -->
+                    <div class="overflow-x-auto max-h-[460px] overflow-y-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-slate-50/90 sticky top-0 z-10 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200/70 backdrop-blur-sm">
+                                <tr>
+                                    <th class="py-3 px-4">日期</th>
+                                    <th class="py-3 px-4">類型 / 分類</th>
+                                    <th class="py-3 px-4">備註說明</th>
+                                    <th class="py-3 px-4 text-right">金額</th>
+                                    <th class="py-3 px-4 text-center w-20">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionTableBody" class="divide-y divide-slate-100 text-sm">
+                                <!-- 由 JS 動態渲染 -->
+                            </tbody>
+                        </table>
+
+                        <!-- 空資料狀態 -->
+                        <div id="tableEmptyState" class="hidden py-14 text-center">
+                            <div class="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3 text-2xl">
+                                <i class="fa-solid fa-receipt"></i>
+                            </div>
+                            <h4 class="text-sm font-bold text-slate-700">目前沒有符合篩選條件的帳目紀錄</h4>
+                            <p class="text-xs text-slate-400 mt-1 mb-4">您可以從左側新增第一筆收支，或點擊上方「載入範例資料」快速體驗圖表分析。</p>
+                            <button onclick="loadDemoData()" class="px-4 py-2 bg-brand-50 hover:bg-brand-100 text-brand-600 text-xs font-semibold rounded-xl transition">
+                                <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> 立即載入範例資料
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- 頁尾 -->
+    <footer class="bg-white border-t border-slate-200/80 mt-12 py-5">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-400 gap-2">
+            <p>© 2026 SmartLedger 個人記帳與消費分析系統 — 資料安全儲存於您的瀏覽器 LocalStorage</p>
+            <p class="flex items-center gap-3">
+                <span>支援 RWD 響應式設計</span>
+                <span>•</span>
+                <span>Chart.js 視覺化引擎</span>
+            </p>
+        </div>
+    </footer>
+
+    <!-- 分類管理 Modal 彈跳視窗 -->
+    <div id="categoryModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full shadow-xl border border-slate-200 overflow-hidden fade-in">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-tags text-brand-600"></i>
+                    收支分類管理
+                </h3>
+                <button onclick="closeCategoryModal()" class="text-slate-400 hover:text-slate-600 w-8 h-8 rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-5">
+                <!-- 新增自訂分類表單 -->
+                <form onsubmit="handleAddCategory(event)" class="flex gap-2">
+                    <select id="newCatType" class="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <option value="expense">支出分類</option>
+                        <option value="income">收入分類</option>
+                    </select>
+                    <input type="text" id="newCatName" maxlength="12" required placeholder="輸入新分類名稱 (例如：寵物)" class="flex-grow px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl transition shrink-0">
+                        新增
+                    </button>
+                </form>
+
+                <!-- 現有支出分類列表 -->
+                <div>
+                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">目前支出分類</h4>
+                    <div id="modalExpenseCats" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <!-- 現有收入分類列表 -->
+                <div>
+                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">目前收入分類</h4>
+                    <div id="modalIncomeCats" class="flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+
+            <div class="px-6 py-3 bg-slate-50 border-t border-slate-100 text-right">
+                <button onclick="closeCategoryModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-xl transition">
+                    完成關閉
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 確認對話框 Modal (取代原生 confirm) -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full shadow-xl border border-slate-200 p-6 fade-in text-center">
+            <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3 text-xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-900" id="confirmTitle">確認執行操作？</h3>
+            <p class="text-xs text-slate-500 mt-2 mb-5" id="confirmMessage">此操作將無法復原。</p>
+            <div class="flex gap-2 justify-center">
+                <button onclick="closeConfirmModal()" class="flex-1 py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">
+                    取消
+                </button>
+                <button id="confirmActionBtn" class="flex-1 py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl transition">
+                    確定執行
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右下角 Toast 通知容器 -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- JavaScript 核心邏輯 -->
+    <script>
+        /* ==========================================
+         * 1. 系統常數與預設狀態
+         * ========================================== */
+        const STORAGE_KEYS = {
+            TRANSACTIONS: 'smartledger_transactions_v1',
+            CATEGORIES: 'smartledger_categories_v1',
+            BUDGET: 'smartledger_budget_v1'
+        };
+
+        const DEFAULT_CATEGORIES = {
+            expense: ['餐飲', '交通', '娛樂', '購物', '居住', '醫療', '教育', '其他'],
+            income: ['薪資', '獎金', '投資', '兼職', '其他']
+        };
+
+        // 分類對應的圖示與顏色設定
+        const CATEGORY_STYLE_MAP = {
+            '餐飲': { icon: 'fa-utensils', color: '#f43f5e' },
+            '交通': { icon: 'fa-train-subway', color: '#3b82f6' },
+            '娛樂': { icon: 'fa-gamepad', color: '#a855f7' },
+            '購物': { icon: 'fa-bag-shopping', color: '#ec4899' },
+            '居住': { icon: 'fa-house', color: '#eab308' },
+            '醫療': { icon: 'fa-briefcase-medical', color: '#14b8a6' },
+            '教育': { icon: 'fa-book-open', color: '#6366f1' },
+            '薪資': { icon: 'fa-sack-dollar', color: '#10b981' },
+            '獎金': { icon: 'fa-gift', color: '#f59e0b' },
+            '投資': { icon: 'fa-chart-line', color: '#06b6d4' },
+            '兼職': { icon: 'fa-laptop-code', color: '#8b5cf6' },
+            '其他': { icon: 'fa-Layer-group', color: '#64748b' }
+        };
+
+        const CHART_PALETTE = [
+            '#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#3b82f6',
+            '#a855f7', '#ec4899', '#14b8a6', '#84cc16', '#64748b'
+        ];
+
+        // 應用程式狀態
+        let transactions = [];
+        let categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+        let monthlyBudget = 20000;
+
+        // 篩選與圖表狀態
+        let filterMode = 'month'; // 'month' 或 'all'
+        let pieChartMode = 'expense'; // 'expense' 或 'income'
+        let barChartMode = 'trend'; // 'trend' 或 'rank'
+
+        // Chart.js 實例
+        let pieChartInstance = null;
+        let barChartInstance = null;
+
+        /* ==========================================
+         * 2. 初始化與 LocalStorage 存取
+         * ========================================== */
+        window.onload = function () {
+            loadDataFromStorage();
+            initDefaultDates();
+            renderFormCategories();
+            populateFilterCategories();
+            initCharts();
+            applyFilters();
+        };
+
+        function loadDataFromStorage() {
+            try {
+                const savedTx = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+                if (savedTx) transactions = JSON.parse(savedTx);
+
+                const savedCats = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+                if (savedCats) {
+                    const parsed = JSON.parse(savedCats);
+                    if (parsed.expense && parsed.income) categories = parsed;
+                }
+
+                const savedBudget = localStorage.getItem(STORAGE_KEYS.BUDGET);
+                if (savedBudget !== null) {
+                    monthlyBudget = Number(savedBudget) || 20000;
+                }
+                document.getElementById('budgetInput').value = monthlyBudget;
+            } catch (err) {
+                console.error('讀取 LocalStorage 失敗:', err);
+            }
+        }
+
+        function saveDataToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions));
+                localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+                localStorage.setItem(STORAGE_KEYS.BUDGET, String(monthlyBudget));
+            } catch (err) {
+                console.error('寫入 LocalStorage 失敗:', err);
+            }
+        }
+
+        function initDefaultDates() {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+
+            document.getElementById('txDate').value = `${yyyy}-${mm}-${dd}`;
+            document.getElementById('filterMonth').value = `${yyyy}-${mm}`;
+        }
+
+        /* ==========================================
+         * 3. 表單互動與新增/刪除帳目
+         * ========================================== */
+        function switchFormType(type) {
+            document.getElementById('txType').value = type;
+            const tabExpense = document.getElementById('tabExpense');
+            const tabIncome = document.getElementById('tabIncome');
+
+            if (type === 'expense') {
+                tabExpense.className = 'py-2 text-sm font-semibold rounded-lg bg-rose-500 text-white shadow-sm transition flex items-center justify-center gap-1.5';
+                tabIncome.className = 'py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1.5';
+            } else {
+                tabIncome.className = 'py-2 text-sm font-semibold rounded-lg bg-emerald-500 text-white shadow-sm transition flex items-center justify-center gap-1.5';
+                tabExpense.className = 'py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1.5';
+            }
+            renderFormCategories();
+        }
+
+        function renderFormCategories() {
+            const type = document.getElementById('txType').value;
+            const selectEl = document.getElementById('txCategory');
+            const list = categories[type] || [];
+
+            selectEl.innerHTML = list.map(cat => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join('');
+        }
+
+        function handleAddTransaction(e) {
+            e.preventDefault();
+            const type = document.getElementById('txType').value;
+            const date = document.getElementById('txDate').value;
+            const category = document.getElementById('txCategory').value;
+            const amount = Number(document.getElementById('txAmount').value);
+            const note = document.getElementById('txNote').value.trim();
+
+            if (!date || !category || isNaN(amount) || amount <= 0) {
+                showToast('請填寫有效的日期、分類與正整數金額', 'error');
+                return;
+            }
+
+            const newTx = {
+                id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+                date,
+                type,
+                category,
+                amount: Math.round(amount),
+                note: note || category
+            };
+
+            transactions.unshift(newTx);
+            saveDataToStorage();
+
+            // 如果目前篩選月份與新增紀錄的月份不同，自動切換到該月份方便使用者看到新紀錄
+            const txMonth = date.slice(0, 7);
+            const currentFilterMonth = document.getElementById('filterMonth').value;
+            if (filterMode === 'month' && currentFilterMonth !== txMonth) {
+                document.getElementById('filterMonth').value = txMonth;
+            }
+
+            // 重置金額與備註欄
+            document.getElementById('txAmount').value = '';
+            document.getElementById('txNote').value = '';
+
+            applyFilters();
+            showToast(`已新增${type === 'expense' ? '支出' : '收入'}：${category} NT$ ${newTx.amount.toLocaleString()}`, 'success');
+        }
+
+        function deleteTransaction(id) {
+            const target = transactions.find(t => t.id === id);
+            if (!target) return;
+
+            transactions = transactions.filter(t => t.id !== id);
+            saveDataToStorage();
+            applyFilters();
+            showToast(`已刪除紀錄：${target.note} (NT$ ${target.amount.toLocaleString()})`, 'info');
+        }
+
+        /* ==========================================
+         * 4. 分類管理 Modal
+         * ========================================== */
+        function openCategoryModal() {
+            renderModalCategories();
+            const modal = document.getElementById('categoryModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeCategoryModal() {
+            const modal = document.getElementById('categoryModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function renderModalCategories() {
+            const expContainer = document.getElementById('modalExpenseCats');
+            const incContainer = document.getElementById('modalIncomeCats');
+
+            expContainer.innerHTML = categories.expense.map(cat => `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                    ${escapeHtml(cat)}
+                    ${categories.expense.length > 1 ? `<button onclick="removeCategory('expense', '${escapeHtml(cat)}')" class="hover:text-rose-900 ml-1" title="刪除分類"><i class="fa-solid fa-xmark"></i></button>` : ''}
+                </span>
+            `).join('');
+
+            incContainer.innerHTML = categories.income.map(cat => `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    ${escapeHtml(cat)}
+                    ${categories.income.length > 1 ? `<button onclick="removeCategory('income', '${escapeHtml(cat)}')" class="hover:text-emerald-900 ml-1" title="刪除分類"><i class="fa-solid fa-xmark"></i></button>` : ''}
+                </span>
+            `).join('');
+        }
+
+        function handleAddCategory(e) {
+            e.preventDefault();
+            const type = document.getElementById('newCatType').value;
+            const nameInput = document.getElementById('newCatName');
+            const name = nameInput.value.trim();
+
+            if (!name) return;
+            if (categories[type].includes(name)) {
+                showToast('該分類名稱已存在！', 'error');
+                return;
+            }
+
+            categories[type].push(name);
+            nameInput.value = '';
+            saveDataToStorage();
+            renderModalCategories();
+            renderFormCategories();
+            populateFilterCategories();
+            showToast(`已新增${type === 'expense' ? '支出' : '收入'}分類：「${name}」`, 'success');
+        }
+
+        function removeCategory(type, name) {
+            if (categories[type].length <= 1) {
+                showToast('至少需保留一個分類', 'error');
+                return;
+            }
+            categories[type] = categories[type].filter(c => c !== name);
+            saveDataToStorage();
+            renderModalCategories();
+            renderFormCategories();
+            populateFilterCategories();
+            showToast(`已移除分類：「${name}」`, 'info');
+        }
+
+        /* ==========================================
+         * 5. 篩選器、統計與預算計算
+         * ========================================== */
+        function setFilterMode(mode) {
+            filterMode = mode;
+            const btnMonth = document.getElementById('btnModeMonth');
+            const btnAll = document.getElementById('btnModeAll');
+            const monthInput = document.getElementById('filterMonth');
+
+            if (mode === 'month') {
+                btnMonth.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-800 shadow-sm transition';
+                btnAll.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition';
+                monthInput.disabled = false;
+                monthInput.classList.remove('opacity-50');
+            } else {
+                btnAll.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-800 shadow-sm transition';
+                btnMonth.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition';
+                monthInput.disabled = true;
+                monthInput.classList.add('opacity-50');
+            }
+            applyFilters();
+        }
+
+        function onFilterTypeChange() {
+            populateFilterCategories();
+            applyFilters();
+        }
+
+        function populateFilterCategories() {
+            const filterType = document.getElementById('filterType').value;
+            const filterCatSelect = document.getElementById('filterCategory');
+            const currentVal = filterCatSelect.value;
+
+            let list = [];
+            if (filterType === 'expense') {
+                list = [...categories.expense];
+            } else if (filterType === 'income') {
+                list = [...categories.income];
+            } else {
+                list = Array.from(new Set([...categories.expense, ...categories.income]));
+            }
+
+            filterCatSelect.innerHTML = `<option value="all">全部分類</option>` +
+                list.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+
+            if (list.includes(currentVal)) {
+                filterCatSelect.value = currentVal;
+            } else {
+                filterCatSelect.value = 'all';
+            }
+        }
+
+        function clearSearch() {
+            document.getElementById('filterKeyword').value = '';
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const selectedMonth = document.getElementById('filterMonth').value;
+            const selectedType = document.getElementById('filterType').value;
+            const selectedCat = document.getElementById('filterCategory').value;
+            const keyword = document.getElementById('filterKeyword').value.trim().toLowerCase();
+            const sortOrder = document.getElementById('sortOrder').value;
+
+            const btnClear = document.getElementById('btnClearSearch');
+            if (keyword) btnClear.classList.remove('hidden');
+            else btnClear.classList.add('hidden');
+
+            // 1. 篩選符合條件的交易紀錄
+            let filtered = transactions.filter(tx => {
+                if (filterMode === 'month' && selectedMonth) {
+                    if (!tx.date.startsWith(selectedMonth)) return false;
+                }
+                if (selectedType !== 'all' && tx.type !== selectedType) return false;
+                if (selectedCat !== 'all' && tx.category !== selectedCat) return false;
+                if (keyword) {
+                    const matchNote = (tx.note || '').toLowerCase().includes(keyword);
+                    const matchCat = (tx.category || '').toLowerCase().includes(keyword);
+                    if (!matchNote && !matchCat) return false;
+                }
+                return true;
+            });
+
+            // 2. 排序
+            filtered.sort((a, b) => {
+                if (sortOrder === 'date-desc') return b.date.localeCompare(a.date);
+                if (sortOrder === 'date-asc') return a.date.localeCompare(b.date);
+                if (sortOrder === 'amount-desc') return b.amount - a.amount;
+                if (sortOrder === 'amount-asc') return a.amount - b.amount;
+                return 0;
+            });
+
+            // 3. 更新頂部統計、預算進度、圖表與表格
+            updateSummaryAndBudget(filtered, selectedMonth);
+            renderTransactionTable(filtered);
+            updateCharts(filtered);
+        }
+
+        function updateSummaryAndBudget(filteredList, selectedMonth) {
+            let totalIncome = 0;
+            let incomeCount = 0;
+            let totalExpense = 0;
+            let expenseCount = 0;
+
+            filteredList.forEach(tx => {
+                if (tx.type === 'income') {
+                    totalIncome += tx.amount;
+                    incomeCount++;
+                } else {
+                    totalExpense += tx.amount;
+                    expenseCount++;
+                }
+            });
+
+            const netBalance = totalIncome - totalExpense;
+            const savingsRate = totalIncome > 0 ? Math.round((netBalance / totalIncome) * 100) : 0;
+
+            // 更新卡片數字
+            document.getElementById('statIncome').textContent = `NT$ ${totalIncome.toLocaleString()}`;
+            document.getElementById('statIncomeCount').textContent = `共 ${incomeCount} 筆收入`;
+
+            document.getElementById('statExpense').textContent = `NT$ ${totalExpense.toLocaleString()}`;
+            document.getElementById('statExpenseCount').textContent = `共 ${expenseCount} 筆支出`;
+
+            const balanceEl = document.getElementById('statBalance');
+            balanceEl.textContent = `${netBalance < 0 ? '-' : ''}NT$ ${Math.abs(netBalance).toLocaleString()}`;
+            balanceEl.className = `text-2xl font-bold mt-1 ${netBalance >= 0 ? 'text-slate-800' : 'text-rose-600'}`;
+            document.getElementById('statSavingsRate').textContent = totalIncome > 0 ? `儲蓄結餘率 ${savingsRate}%` : '尚無收入紀錄';
+
+            // 計算指定月份的總支出 (不受關鍵字或單一分類過濾影響，確保預算監控準確反映當月整體支出)
+            const targetMonth = selectedMonth || new Date().toISOString().slice(0, 7);
+            document.getElementById('budgetMonthBadge').textContent = `${targetMonth} 月份`;
+            document.getElementById('labelBudgetCard').textContent = `${targetMonth} 預算剩餘`;
+
+            const monthTotalExpense = transactions
+                .filter(t => t.type === 'expense' && t.date.startsWith(targetMonth))
+                .reduce((sum, t) => sum + t.amount, 0);
+
+            const budgetRemain = monthlyBudget - monthTotalExpense;
+            const usagePercent = monthlyBudget > 0 ? Math.round((monthTotalExpense / monthlyBudget) * 100) : 0;
+
+            // 更新頂部第 4 張卡片
+            const remainEl = document.getElementById('statBudgetRemain');
+            remainEl.textContent = `${budgetRemain < 0 ? '超支 ' : ''}NT$ ${Math.abs(budgetRemain).toLocaleString()}`;
+            document.getElementById('statBudgetTotal').textContent = `每月預算：NT$ ${monthlyBudget.toLocaleString()}`;
+
+            // 更新左側進度條與警示狀態
+            document.getElementById('budgetProgressText').textContent = `NT$ ${monthTotalExpense.toLocaleString()} / NT$ ${monthlyBudget.toLocaleString()}`;
+            const percentBadge = document.getElementById('budgetPercentBadge');
+            const progressBar = document.getElementById('budgetProgressBar');
+            const alertBox = document.getElementById('budgetAlertBox');
+            const alertText = document.getElementById('budgetAlertText');
+
+            percentBadge.textContent = `${usagePercent}%`;
+            progressBar.style.width = `${Math.min(usagePercent, 100)}%`;
+
+            if (usagePercent >= 100) {
+                remainEl.className = 'text-2xl font-bold text-rose-600 mt-1';
+                percentBadge.className = 'text-base font-extrabold text-rose-600';
+                progressBar.className = 'h-full bg-rose-500 progress-bar-fill rounded-full';
+                alertBox.className = 'flex items-center gap-2 text-xs font-medium text-rose-700 bg-rose-50 px-3 py-2 rounded-lg border border-rose-200';
+                alertBox.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i><span>警告：本月支出已超過預算 NT$ ${Math.abs(budgetRemain).toLocaleString()}！</span>`;
+            } else if (usagePercent >= 80) {
+                remainEl.className = 'text-2xl font-bold text-amber-600 mt-1';
+                percentBadge.className = 'text-base font-extrabold text-amber-600';
+                progressBar.className = 'h-full bg-amber-500 progress-bar-fill rounded-full';
+                alertBox.className = 'flex items-center gap-2 text-xs font-medium text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200';
+                alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>提醒：本月預算已使用 ${usagePercent}%，請留意後續開支。</span>`;
+            } else {
+                remainEl.className = 'text-2xl font-bold text-brand-600 mt-1';
+                percentBadge.className = 'text-base font-extrabold text-emerald-600';
+                progressBar.className = 'h-full bg-emerald-500 progress-bar-fill rounded-full';
+                alertBox.className = 'flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-50/80 px-3 py-2 rounded-lg border border-emerald-200/60';
+                alertBox.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>目前消費控制良好，剩餘可用 NT$ ${budgetRemain.toLocaleString()}。</span>`;
+            }
+        }
+
+        function saveBudget() {
+            const val = Number(document.getElementById('budgetInput').value);
+            if (isNaN(val) || val <= 0) {
+                showToast('請輸入大於 0 的有效預算金額', 'error');
+                return;
+            }
+            monthlyBudget = Math.round(val);
+            document.getElementById('budgetInput').value = monthlyBudget;
+            saveDataToStorage();
+            applyFilters();
+            showToast(`每月預算已更新為 NT$ ${monthlyBudget.toLocaleString()}`, 'success');
+        }
+
+        function focusBudgetInput() {
+            const input = document.getElementById('budgetInput');
+            input.focus();
+            input.select();
+        }
+
+        /* ==========================================
+         * 6. 渲染收支明細表格
+         * ========================================== */
+        function renderTransactionTable(list) {
+            const tbody = document.getElementById('transactionTableBody');
+            const emptyState = document.getElementById('tableEmptyState');
+            const countBadge = document.getElementById('recordCountBadge');
+
+            countBadge.textContent = `${list.length} 筆`;
+
+            if (list.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            tbody.innerHTML = list.map(tx => {
+                const isExp = tx.type === 'expense';
+                const style = CATEGORY_STYLE_MAP[tx.category] || { icon: 'fa-tag', color: isExp ? '#f43f5e' : '#10b981' };
+
+                return `
+                    <tr class="hover:bg-slate-50/80 transition group">
+                        <td class="py-3.5 px-4 whitespace-nowrap text-xs font-medium text-slate-500">
+                            ${escapeHtml(tx.date)}
+                        </td>
+                        <td class="py-3.5 px-4 whitespace-nowrap">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs shadow-xs shrink-0" style="background-color: ${style.color}">
+                                    <i class="fa-solid ${style.icon}"></i>
+                                </span>
+                                <div>
+                                    <span class="font-semibold text-slate-800 block leading-tight">${escapeHtml(tx.category)}</span>
+                                    <span class="text-[11px] ${isExp ? 'text-rose-500' : 'text-emerald-600'} font-medium">
+                                        ${isExp ? '支出' : '收入'}
+                                    </span>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3.5 px-4 text-slate-600 max-w-xs truncate" title="${escapeHtml(tx.note)}">
+                            ${escapeHtml(tx.note)}
+                        </td>
+                        <td class="py-3.5 px-4 whitespace-nowrap text-right font-bold ${isExp ? 'text-rose-600' : 'text-emerald-600'}">
+                            ${isExp ? '-' : '+'}NT$ ${tx.amount.toLocaleString()}
+                        </td>
+                        <td class="py-3.5 px-4 whitespace-nowrap text-center">
+                            <button onclick="deleteTransaction('${tx.id}')" class="w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition inline-flex items-center justify-center" title="刪除此筆紀錄">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        /* ==========================================
+         * 7. Chart.js 視覺化圖表分析
+         * ========================================== */
+        function initCharts() {
+            const pieCtx = document.getElementById('categoryPieChart').getContext('2d');
+            const barCtx = document.getElementById('trendBarChart').getContext('2d');
+
+            Chart.defaults.font.family = "'Inter', 'Noto Sans TC', sans-serif";
+            Chart.defaults.color = '#64748b';
+
+            pieChartInstance = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: '#ffffff' }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '64%',
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { boxWidth: 12, padding: 14, font: { size: 12 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const val = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                                    return ` ${context.label}: NT$ ${val.toLocaleString()} (${pct}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            barChartInstance = new Chart(barCtx, {
+                type: 'bar',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#f1f5f9' },
+                            ticks: {
+                                callback: function (val) {
+                                    return '$' + val.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { boxWidth: 12, font: { size: 12 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    return ` ${context.dataset.label}: NT$ ${(context.parsed.y || 0).toLocaleString()}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function switchPieMode(mode) {
+            pieChartMode = mode;
+            const btnExp = document.getElementById('btnPieExpense');
+            const btnInc = document.getElementById('btnPieIncome');
+            const titleEl = document.getElementById('pieChartTitle');
+
+            if (mode === 'expense') {
+                btnExp.className = 'px-2.5 py-1 rounded-md bg-white font-semibold text-slate-800 shadow-sm transition';
+                btnInc.className = 'px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-800 transition';
+                titleEl.textContent = '支出分類佔比分析';
+            } else {
+                btnInc.className = 'px-2.5 py-1 rounded-md bg-white font-semibold text-slate-800 shadow-sm transition';
+                btnExp.className = 'px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-800 transition';
+                titleEl.textContent = '收入分類佔比分析';
+            }
+            applyFilters();
+        }
+
+        function switchBarMode(mode) {
+            barChartMode = mode;
+            const btnTrend = document.getElementById('btnBarTrend');
+            const btnRank = document.getElementById('btnBarRank');
+
+            if (mode === 'trend') {
+                btnTrend.className = 'px-2.5 py-1 rounded-md bg-white font-semibold text-slate-800 shadow-sm transition';
+                btnRank.className = 'px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-800 transition';
+            } else {
+                btnRank.className = 'px-2.5 py-1 rounded-md bg-white font-semibold text-slate-800 shadow-sm transition';
+                btnTrend.className = 'px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-800 transition';
+            }
+            applyFilters();
+        }
+
+        function updateCharts(filteredList) {
+            updatePieChart(filteredList);
+            updateBarChart(filteredList);
+        }
+
+        function updatePieChart(filteredList) {
+            const targetList = filteredList.filter(t => t.type === pieChartMode);
+            const pieEmpty = document.getElementById('pieEmptyState');
+
+            if (targetList.length === 0) {
+                pieChartInstance.data.labels = [];
+                pieChartInstance.data.datasets[0].data = [];
+                pieChartInstance.update();
+                pieEmpty.classList.remove('hidden');
+                return;
+            }
+
+            pieEmpty.classList.add('hidden');
+
+            // 依分類加總
+            const catTotals = {};
+            targetList.forEach(t => {
+                catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
+            });
+
+            const sortedEntries = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+            const labels = sortedEntries.map(item => item[0]);
+            const data = sortedEntries.map(item => item[1]);
+            const colors = labels.map((label, idx) => {
+                return CATEGORY_STYLE_MAP[label]?.color || CHART_PALETTE[idx % CHART_PALETTE.length];
+            });
+
+            pieChartInstance.data.labels = labels;
+            pieChartInstance.data.datasets[0].data = data;
+            pieChartInstance.data.datasets[0].backgroundColor = colors;
+            pieChartInstance.update();
+        }
+
+        function updateBarChart(filteredList) {
+            const barEmpty = document.getElementById('barEmptyState');
+            if (filteredList.length === 0) {
+                barChartInstance.data.labels = [];
+                barChartInstance.data.datasets = [];
+                barChartInstance.update();
+                barEmpty.classList.remove('hidden');
+                return;
+            }
+
+            barEmpty.classList.add('hidden');
+
+            if (barChartMode === 'trend') {
+                // 依日期或月份彙整收支趨勢
+                const groupByMonth = filterMode === 'all';
+                const grouped = {};
+
+                filteredList.forEach(t => {
+                    const key = groupByMonth ? t.date.slice(0, 7) : t.date.slice(5); // YYYY-MM 或 MM-DD
+                    if (!grouped[key]) grouped[key] = { income: 0, expense: 0 };
+                    grouped[key][t.type] += t.amount;
+                });
+
+                const sortedKeys = Object.keys(grouped).sort();
+                const expData = sortedKeys.map(k => grouped[k].expense);
+                const incData = sortedKeys.map(k => grouped[k].income);
+
+                barChartInstance.data.labels = sortedKeys;
+                barChartInstance.data.datasets = [
+                    {
+                        label: '支出',
+                        data: expData,
+                        backgroundColor: '#f43f5e',
+                        borderRadius: 6
+                    },
+                    {
+                        label: '收入',
+                        data: incData,
+                        backgroundColor: '#10b981',
+                        borderRadius: 6
+                    }
+                ];
+            } else {
+                // 各分類消費金額排行
+                const catMap = {};
+                filteredList.forEach(t => {
+                    const label = `${t.category} (${t.type === 'expense' ? '支' : '收'})`;
+                    catMap[label] = {
+                        amount: (catMap[label]?.amount || 0) + t.amount,
+                        type: t.type
+                    };
+                });
+
+                const sorted = Object.entries(catMap).sort((a, b) => b[1].amount - a[1].amount).slice(0, 8);
+                barChartInstance.data.labels = sorted.map(s => s[0]);
+                barChartInstance.data.datasets = [
+                    {
+                        label: '分類總金額',
+                        data: sorted.map(s => s[1].amount),
+                        backgroundColor: sorted.map(s => s[1].type === 'expense' ? '#6366f1' : '#10b981'),
+                        borderRadius: 6
+                    }
+                ];
+            }
+
+            barChartInstance.update();
+        }
+
+        /* ==========================================
+         * 8. 載入範例資料、匯出 CSV 與清空資料
+         * ========================================== */
+        function loadDemoData() {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const prevMm = String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0');
+            const prevYyyy = now.getMonth() === 0 ? yyyy - 1 : yyyy;
+
+            const currentMonthPrefix = `${yyyy}-${mm}`;
+            const prevMonthPrefix = `${prevYyyy}-${prevMm}`;
+
+            const sampleData = [
+                { id: 'demo_1', date: `${currentMonthPrefix}-01`, type: 'income', category: '薪資', amount: 52000, note: '本月本薪入帳' },
+                { id: 'demo_2', date: `${currentMonthPrefix}-02`, type: 'expense', category: '居住', amount: 11500, note: '房租與管理費' },
+                { id: 'demo_3', date: `${currentMonthPrefix}-03`, type: 'expense', category: '交通', amount: 1200, note: 'TPASS 通勤月票' },
+                { id: 'demo_4', date: `${currentMonthPrefix}-05`, type: 'expense', category: '餐飲', amount: 680, note: '朋友聚餐火鍋' },
+                { id: 'demo_5', date: `${currentMonthPrefix}-07`, type: 'expense', category: '購物', amount: 2450, note: '日用品與秋季服飾採買' },
+                { id: 'demo_6', date: `${currentMonthPrefix}-10`, type: 'income', category: '投資', amount: 3600, note: 'ETF 季配息入帳' },
+                { id: 'demo_7', date: `${currentMonthPrefix}-12`, type: 'expense', category: '娛樂', amount: 950, note: '電影票與串流訂閱' },
+                { id: 'demo_8', date: `${currentMonthPrefix}-14`, type: 'expense', category: '餐飲', amount: 420, note: '平日午餐與手搖飲' },
+                { id: 'demo_9', date: `${currentMonthPrefix}-16`, type: 'expense', category: '醫療', amount: 550, note: '洗牙掛號與保健品' },
+                { id: 'demo_10', date: `${currentMonthPrefix}-18`, type: 'expense', category: '教育', amount: 1680, note: '線上程式設計課程與書籍' },
+                { id: 'demo_11', date: `${prevMonthPrefix}-05`, type: 'income', category: '薪資', amount: 52000, note: '上月薪資' },
+                { id: 'demo_12', date: `${prevMonthPrefix}-15`, type: 'expense', category: '居住', amount: 11500, note: '上月房租' },
+                { id: 'demo_13', date: `${prevMonthPrefix}-20`, type: 'expense', category: '餐飲', amount: 4800, note: '上月伙食費彙整' }
+            ];
+
+            transactions = sampleData;
+            monthlyBudget = 25000;
+            document.getElementById('budgetInput').value = monthlyBudget;
+            document.getElementById('filterMonth').value = currentMonthPrefix;
+            setFilterMode('month');
+            saveDataToStorage();
+            applyFilters();
+            showToast('已載入豐富的範例帳目資料！', 'success');
+        }
+
+        function exportCSV() {
+            if (transactions.length === 0) {
+                showToast('目前沒有任何資料可供匯出', 'error');
+                return;
+            }
+
+            const headers = ['日期', '收支類型', '分類', '金額', '備註說明'];
+            const rows = transactions.map(t => [
+                t.date,
+                t.type === 'expense' ? '支出' : '收入',
+                `"${(t.category || '').replace(/"/g, '""')}"`,
+                t.amount,
+                `"${(t.note || '').replace(/"/g, '""')}"`
+            ]);
+
+            // 加入 BOM 確保 Excel 打開繁體中文不亂碼
+            const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `SmartLedger_帳目備份_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showToast('CSV 報表已成功匯出下載！', 'success');
+        }
+
+        function confirmClearData() {
+            if (transactions.length === 0) {
+                showToast('目前資料已經是空的', 'info');
+                return;
+            }
+            openConfirmModal(
+                '確定要清空所有帳目資料嗎？',
+                '這將會刪除您儲存在瀏覽器中的所有收支紀錄，建議先點擊「匯出 CSV」備份。',
+                function () {
+                    transactions = [];
+                    saveDataToStorage();
+                    applyFilters();
+                    closeConfirmModal();
+                    showToast('已清空所有收支紀錄', 'info');
+                }
+            );
+        }
+
+        /* ==========================================
+         * 9. 通用 Modal 與 Toast 通知輔助函式
+         * ========================================== */
+        function openConfirmModal(title, message, onConfirm) {
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').textContent = message;
+            const actionBtn = document.getElementById('confirmActionBtn');
+            actionBtn.onclick = onConfirm;
+
+            const modal = document.getElementById('confirmModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirmModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+
+            const styleMap = {
+                success: 'bg-slate-900 text-white border-emerald-500',
+                error: 'bg-rose-600 text-white border-rose-400',
+                info: 'bg-slate-800 text-white border-brand-400'
+            };
+            const iconMap = {
+                success: 'fa-circle-check text-emerald-400',
+                error: 'fa-circle-xmark text-white',
+                info: 'fa-circle-info text-brand-400'
+            };
+
+            toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg border-l-4 text-xs font-medium fade-in ${styleMap[type] || styleMap.info}`;
+            toast.innerHTML = `
+                <i class="fa-solid ${iconMap[type] || iconMap.info} text-sm"></i>
+                <span>${escapeHtml(message)}</span>
+            `;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 2800);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
